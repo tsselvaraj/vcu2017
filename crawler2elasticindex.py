@@ -1,16 +1,15 @@
-# Please install requests, lxml, bs4 modules using pip install
 import requests
 from lxml import html
 import collections
 from urllib.parse import urljoin
-from bs4 import BeautifulSoup
+import bleach
 from elasticsearch import Elasticsearch
 import json
 
 es = Elasticsearch()
-es.indices.create(index='web', ignore=400)
+#es.indices.create(index='web')
 
-STARTING_URL = 'http://www.cnn.com/'
+STARTING_URL = 'https://www.vcu.edu/'
 
 urls_queue = collections.deque()
 urls_queue.append(STARTING_URL)
@@ -19,25 +18,27 @@ found_urls.add(STARTING_URL)
 
 data = {}
 
+urlcount = 1
 
 while len(urls_queue):
+
     url = urls_queue.popleft()
 
     response = requests.get(url)
     parsed_body = html.fromstring(response.content)
 
     html_content = response.text
-    soup = BeautifulSoup(html_content, 'lxml')
+    text_only = bleach.clean(html_content, strip=True, strip_comments=True)
     print(url)
-    print(soup.title.string)
-    print(soup.get_text())
 
     data['url'] = url
-    data['title'] = soup.title.string
-    data['content'] = soup.get_text()
+    data['content'] = text_only
     json_data = json.dumps(data)
 
-    es.index("web","webpage", json_data)
+    #es.index("web","webpage", body=json_data, id=urlcount)
+    es.index("web", body=json_data, id=urlcount)
+
+    urlcount = urlcount+1
 
     # Find all links
     links = {urljoin(response.url, url) for url in parsed_body.xpath('//a/@href') if
